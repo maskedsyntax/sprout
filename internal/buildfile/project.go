@@ -21,7 +21,22 @@ type Project struct {
 	Language    string // java, kotlin or groovy
 	Packaging   string // jar or war
 	Warnings    []string
+
+	raw  string // file content as read
+	crlf bool   // the file uses Windows line endings
 }
+
+// Encode converts edited content (always LF) back to the file's original
+// line-ending style.
+func (p *Project) Encode(content string) string {
+	if p.crlf {
+		return strings.ReplaceAll(content, "\n", "\r\n")
+	}
+	return content
+}
+
+// Unchanged reports whether data is still the content that was loaded.
+func (p *Project) Unchanged(data []byte) bool { return string(data) == p.raw }
 
 // ErrNoProject means no build file was found.
 var ErrNoProject = errors.New("no pom.xml, build.gradle or build.gradle.kts found")
@@ -59,11 +74,14 @@ func Load(dir string, kind Kind) (*Project, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc, err := Parse(kind, string(data))
+	raw := string(data)
+	// Work on LF internally; CRLF is restored when writing (see Encode).
+	crlf := strings.Contains(raw, "\r\n")
+	doc, err := Parse(kind, strings.ReplaceAll(raw, "\r\n", "\n"))
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	p := &Project{Dir: dir, File: path, Kind: kind, Doc: doc, Language: "java", Packaging: "jar"}
+	p := &Project{Dir: dir, File: path, Kind: kind, Doc: doc, Language: "java", Packaging: "jar", raw: raw, crlf: crlf}
 	if kind == Maven {
 		err = p.inspectMaven()
 	} else {

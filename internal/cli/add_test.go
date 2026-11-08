@@ -87,6 +87,18 @@ func TestAddAndRemoveMaven(t *testing.T) {
 	}
 }
 
+func TestAddPreservesCRLF(t *testing.T) {
+	e, dir := depEnv(t, "maven-project", "pom.xml", "xml", "web")
+	pom := filepath.Join(dir, "pom.xml")
+	os.WriteFile(pom, []byte(strings.ReplaceAll(fixtureBuild(t, "web.xml"), "\n", "\r\n")), 0o644)
+	e.mustRun("add", "data-jpa", "postgresql", "-C", dir)
+	got, _ := os.ReadFile(pom)
+	if strings.Count(string(got), "\n") != strings.Count(string(got), "\r\n") {
+		t.Error("mixed line endings after edit")
+	}
+	assertSameIgnoringBlankLines(t, strings.ReplaceAll(string(got), "\r\n", "\n"), fixtureBuild(t, "web-jpa-pg.xml"))
+}
+
 func TestAddGradleKotlinWithBOMAndPlugin(t *testing.T) {
 	e, dir := depEnv(t, "gradle-project-kotlin", "build.gradle.kts", "kts", "web")
 	e.mustRun("add", "lombok", "Config Client", "native", "-C", dir)

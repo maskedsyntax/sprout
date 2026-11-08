@@ -379,14 +379,14 @@ func writeBuildFile(p *buildfile.Project, content string) error {
 	if err != nil {
 		return err
 	}
-	if string(current) != p.Doc.Src {
+	if !p.Unchanged(current) {
 		return fmt.Errorf("%s changed while Sprout was working; nothing was written, please run the command again", p.File)
 	}
 	mode := os.FileMode(0o644)
 	if fi, err := os.Stat(p.File); err == nil {
 		mode = fi.Mode().Perm()
 	}
-	if err := platform.WriteFileAtomic(p.File, []byte(content), mode); err != nil {
+	if err := platform.WriteFileAtomic(p.File, []byte(p.Encode(content)), mode); err != nil {
 		return fmt.Errorf("write %s: %w", p.File, err)
 	}
 	return nil
