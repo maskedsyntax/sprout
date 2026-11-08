@@ -24,6 +24,7 @@ Next steps:
 - [Why Sprout?](#why-sprout)
 - [Installation](#installation)
 - [Quick start](#quick-start)
+- [Command guide](#command-guide)
 - [Interactive mode](#interactive-mode)
 - [Flag-based mode](#flag-based-mode)
 - [Adding and removing dependencies](#adding-and-removing-dependencies)
@@ -81,7 +82,7 @@ Download the archive for your platform from the
 
 ```sh
 # Example: Linux x86-64
-VERSION=0.1.0
+VERSION=0.2.1
 curl -LO https://github.com/maskedsyntax/sprout/releases/download/v${VERSION}/sprout_${VERSION}_linux_amd64.tar.gz
 tar -xzf sprout_${VERSION}_linux_amd64.tar.gz sprout
 sudo install sprout /usr/local/bin/
@@ -142,6 +143,234 @@ $ sprout doctor
 · Gradle         not found (optional: Gradle projects include ./gradlew)
 · Editor         not configured (set with 'sprout config set editor <cmd>' or $EDITOR)
 ```
+
+## Command guide
+
+A short "how to use" for every command. Each one links to a section with more
+detail. Every command also has `--help`, for example `sprout add --help`.
+
+| Command | Use it to |
+|---------|-----------|
+| [`new`](#sprout-new) | Create a new Spring Boot project |
+| [`add`](#sprout-add) | Add dependencies to an existing project |
+| [`remove`](#sprout-remove) | Remove dependencies from an existing project |
+| [`deps`](#sprout-deps) | Find dependency names |
+| [`versions`](#sprout-versions) | See which Spring Boot versions are available |
+| [`options`](#sprout-options) | See every project option the server supports |
+| [`presets`](#sprout-presets) | Save and reuse project setups |
+| [`config`](#sprout-config) | Set your defaults |
+| [`history`](#sprout-history) | See and reuse projects you generated |
+| [`cache`](#sprout-cache) | Manage the cached server metadata |
+| [`doctor`](#sprout-doctor) | Check that everything is set up |
+| [`completion`](#sprout-completion) | Turn on tab completion in your shell |
+| [`version`](#sprout-version) | Print the installed version |
+
+### `sprout new`
+
+Creates a new project in a new directory.
+
+**Easiest way:** run `sprout new` and answer the questions. Use the arrow keys
+to move, `Enter` to continue and `Ctrl+C` to cancel. In the dependency step,
+press `/` to search and `Space` to select.
+
+**Without questions:** pass the name and options as flags. Anything you leave
+out gets the server's default.
+
+```sh
+sprout new                                         # wizard
+sprout new my-api                                  # wizard, name filled in
+sprout new my-api --deps web,data-jpa,postgresql   # no questions
+sprout new my-api --build maven --java 21 --boot 4.1.x
+sprout new my-api --language kotlin --build gradle-kotlin
+sprout new my-api --preset rest-api                # start from a saved preset
+sprout new my-api --last                           # same settings as last time
+sprout new my-api --git --open                     # git init, then open your editor
+sprout new my-api --deps web --dry-run             # only show what would happen
+```
+
+Then `cd my-api` and run `./mvnw spring-boot:run` (Maven) or `./gradlew bootRun`
+(Gradle). See [Interactive mode](#interactive-mode) and
+[Flag-based mode](#flag-based-mode) for every option.
+
+### `sprout add`
+
+Adds dependencies to a project you already have, making the same build file
+changes start.spring.io would.
+
+1. `cd` into the project, or any folder inside it.
+2. Run `sprout add` and pick from the list, or name the dependencies:
+   `sprout add lombok validation`.
+3. Read the diff and answer `y` to apply it.
+4. Reload the project in your IDE.
+
+```sh
+sprout add                        # search and pick
+sprout add web
+sprout add data-jpa postgresql
+sprout add datajpa                # typos are corrected to data-jpa
+sprout add lombok --dry-run       # preview only
+sprout add security --yes         # skip the question (scripts)
+sprout add web -C ../orders       # a project in another folder
+```
+
+If a name isn't exact (`postgres`), Sprout asks "did you mean…?". See
+[Adding and removing dependencies](#adding-and-removing-dependencies).
+
+### `sprout remove`
+
+Removes dependencies, along with anything that only they needed.
+`sprout rm` works too.
+
+1. `cd` into the project.
+2. Run `sprout remove` and pick from the project's current dependencies, or
+   name them: `sprout remove lombok`.
+3. Read the diff and answer `y`.
+
+```sh
+sprout remove
+sprout remove lombok devtools
+sprout rm web --dry-run
+```
+
+It takes the same flags as `add`: `--dry-run`, `--yes`, `-C`, `--boot` and `--json`.
+
+### `sprout deps`
+
+Finds dependency IDs, the short names used by `new --deps`, `add` and
+`remove`.
+
+```sh
+sprout deps                          # everything, grouped by category
+sprout deps search postgres          # search names and descriptions
+sprout deps list --category web      # one category
+sprout deps info data-jpa            # details, compatibility and docs links
+sprout deps --boot 4.0.x             # only those that work with Boot 4.0.x
+```
+
+See [Dependency search](#dependency-search).
+
+### `sprout versions`
+
+Lists the Spring Boot versions the server offers and marks the default.
+
+```sh
+sprout versions
+sprout versions --stable             # only GA releases
+```
+
+Pass a version to `--boot` as an exact version (`4.1.2`), a line (`4.1.x`) or
+`latest`. See [Spring Boot versions](#spring-boot-versions-and-server-options).
+
+### `sprout options`
+
+Shows every option the server supports for a new project: build types,
+languages, Java versions, packaging and so on, with each one's allowed
+values and default. Use it to find the values `sprout new` flags accept.
+
+```sh
+sprout options
+sprout options --json
+```
+
+### `sprout presets`
+
+Saves a set of project options under a name so you can reuse it.
+
+```sh
+sprout presets list                              # yours plus built-in examples
+sprout presets save rest-api --java 21 --deps web,validation
+sprout presets save my-usual --from-last         # from the last generated project
+sprout presets show rest-api                     # contents, checked against the server
+sprout presets use rest-api my-api               # = sprout new my-api --preset rest-api
+sprout presets edit rest-api --java 25           # change fields
+sprout presets edit rest-api                     # open presets.toml in your editor
+sprout presets delete rest-api
+```
+
+See [Presets](#presets).
+
+### `sprout config`
+
+Sets defaults so you don't repeat the same flags. Flags you pass still take
+priority.
+
+```sh
+sprout config show                               # current settings
+sprout config set default-java 21
+sprout config set default-group com.acme
+sprout config set default-build maven-project
+sprout config set editor code                    # used by --open
+sprout config set git true                       # always git init
+sprout config get default-java
+sprout config unset default-java
+sprout config reset                              # back to defaults (presets are kept)
+sprout config path                               # where the file lives
+```
+
+`sprout config set --help` lists every key. See [Configuration](#configuration).
+
+### `sprout history`
+
+Shows projects you generated recently. History is kept only on your machine.
+
+```sh
+sprout history                     # last 10
+sprout history --limit 0           # all of them
+sprout new another-api --last      # reuse the most recent settings
+sprout history clear               # forget the list (your projects are untouched)
+```
+
+### `sprout cache`
+
+Sprout caches the server's metadata (versions and dependencies) so commands
+start instantly. The cache refreshes by itself. These commands are for when
+you want control.
+
+```sh
+sprout cache status                # how old the cache is
+sprout cache refresh               # fetch now, e.g. right after a Spring Boot release
+sprout cache clear                 # delete it
+```
+
+See [Cache and offline use](#cache-and-offline-use).
+
+### `sprout doctor`
+
+Checks your setup: config file, server connection, cache, Java, Git, Maven,
+Gradle and your editor. Run it first when something doesn't work.
+
+```sh
+sprout doctor
+```
+
+### `sprout completion`
+
+Prints a tab-completion script for your shell. With completion on, `Tab`
+suggests dependency IDs, versions, preset names and more.
+
+```sh
+sprout completion fish > ~/.config/fish/completions/sprout.fish
+sprout completion zsh  > "${fpath[1]}/_sprout"
+```
+
+See [Shell completion](#shell-completion) for Bash and PowerShell.
+
+### `sprout version`
+
+Prints the installed version. `sprout --version` does the same.
+
+```sh
+sprout version
+```
+
+### Flags that work with every command
+
+| Flag | Meaning |
+|------|---------|
+| `--server URL` | Use a different Initializr server, such as your company's own |
+| `--offline` | Use cached data only and never contact the server |
+| `--no-color` | Plain output (`NO_COLOR=1` works too) |
+| `--json` | Machine-readable output, on commands that print results |
 
 ## Interactive mode
 
