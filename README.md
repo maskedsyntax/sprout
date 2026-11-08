@@ -26,6 +26,7 @@ Next steps:
 - [Quick start](#quick-start)
 - [Interactive mode](#interactive-mode)
 - [Flag-based mode](#flag-based-mode)
+- [Adding and removing dependencies](#adding-and-removing-dependencies)
 - [Dependency search](#dependency-search)
 - [Spring Boot versions and server options](#spring-boot-versions-and-server-options)
 - [Presets](#presets)
@@ -56,6 +57,10 @@ project without leaving the terminal. Sprout gives you:
 - **Safe, atomic project creation.** The archive is downloaded and extracted in a
   temporary directory, checked for path-traversal attacks, and moved into place
   only when complete. Existing files are never silently overwritten.
+- **Add or remove dependencies in existing projects** (`sprout add lombok`)
+  with exactly the build changes start.spring.io would make.
+- **Typo-tolerant names:** `datajpa` becomes `data-jpa`, and close matches are
+  offered for the rest.
 - **Presets, defaults, history, Git and editor integration.**
 - **A single static binary** for Linux, macOS and Windows. No Java needed to
   generate a project.
@@ -117,6 +122,11 @@ sprout new my-api --java 21 --boot 4.1.x
 sprout new my-api --preset rest-api
 sprout new my-api --git --open
 sprout new my-api --deps web --dry-run       # show what would happen
+
+cd my-api
+sprout add                                   # search and pick dependencies
+sprout add data-jpa postgresql               # or name them
+sprout remove postgresql
 ```
 
 Check your environment at any time:
@@ -214,6 +224,83 @@ Global flags work with every command: `--server URL`, `--offline` and `--no-colo
 sprout new orders --build maven --java 21 --deps web,data-jpa,postgresql \
   --group com.acme --no-interactive --json | jq -r .dir
 ```
+
+## Adding and removing dependencies
+
+Run these inside an existing Spring Boot project (any subdirectory works):
+
+```sh
+sprout add                        # searchable list: type / to search, space to select
+sprout add web
+sprout add data-jpa postgresql lombok
+sprout add datajpa                # typo-tolerant: uses data-jpa
+sprout add "Spring Data JPA"      # display names work too
+sprout add postgres               # not an exact ID: asks "did you mean postgresql?"
+sprout remove                     # pick from the project's dependencies
+sprout remove lombok devtools
+sprout add security --dry-run     # preview only
+sprout add security --yes         # no confirmation (scripts)
+sprout add web -C ../orders       # another project directory
+```
+
+Example:
+
+```console
+$ sprout add lombok
+./pom.xml (Maven · Spring Boot 4.1.2 · Java 21)
+
+--- pom.xml
++++ pom.xml
+@@ -36,6 +36,11 @@
++        <dependency>
++            <groupId>org.projectlombok</groupId>
++            <artifactId>lombok</artifactId>
++            <optional>true</optional>
++        </dependency>
+...
++            <plugin>
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-compiler-plugin</artifactId>
+...
+Apply these changes to pom.xml? [y/N] y
+✓ Added lombok to pom.xml
+```
+
+**How it works.** Dependencies often need more than one line. Some need a test
+starter, a BOM and its version property (Spring Cloud), a build plugin (`native`),
+or annotation-processor setup (Lombok needs four Gradle configurations, or
+`maven-compiler-plugin` configuration). Instead of guessing, Sprout:
+
+1. Reads your `pom.xml`, `build.gradle` or `build.gradle.kts` and detects the build
+   type, Spring Boot version, Java version, language and packaging.
+2. Detects which Initializr dependencies you already have, using the coordinates
+   the server reports for each one.
+3. Asks Spring Initializr for your project's build file twice: as it is, and with
+   the change.
+4. Applies exactly the difference to your file, element by element. Your
+   formatting, indentation, comments, ordering and any other content are kept.
+5. Shows a diff and asks before writing. The file is written atomically, and
+   only if it didn't change in the meantime.
+
+**Safety.**
+- Nothing is written without confirmation in a terminal, or `--yes` in scripts.
+- `--dry-run` only previews. `--json` prints a machine-readable report, including
+  the diff.
+- Dependencies that are already present are skipped.
+- Incompatible ones are refused before anything happens (`requires Spring Boot
+  >=4.0.0 and <4.1.0-M1, but the project uses 4.1.2`).
+- If something you customized would have to change (for example your own
+  `maven-compiler-plugin` setup when adding Lombok), Sprout leaves it alone. It
+  prints the snippet start.spring.io would generate so you can merge it by hand.
+- Removing a dependency only removes what that dependency alone needs. Shared
+  things (a BOM used by another Spring Cloud starter, for example) stay.
+
+**Typo tolerance** works everywhere dependency names are accepted: `add`,
+`remove`, `new --deps` and `deps info`.
+- Differences in case and separators are corrected automatically, since they are
+  unambiguous: `datajpa`, `DATA_JPA` and `Spring Data JPA` all become `data-jpa`.
+- Anything else, like `postgres` or `securty`, opens a "did you mean…?" chooser
+  in a terminal. In scripts it fails with suggestions instead of guessing.
 
 ## Dependency search
 
@@ -444,6 +531,15 @@ Sprout is a client of the documented
 - **Build-file-only types** (`maven-build`, `gradle-build`) are exactly what the
   server offers. For example, start.spring.io has no Kotlin-DSL build-file-only type.
 - **No offline generation**, as explained [above](#cache-and-offline-use).
+- **`add`/`remove` need a supported Spring Boot line.** The server must still
+  offer your project's Spring Boot line, because it generates the reference build
+  files. Older projects get a clear error (`--boot` can override this at your own
+  risk). Patch versions don't matter: a 4.0.3 project uses the server's newest
+  4.0.x as the reference.
+- **`add`/`remove` work on single-module projects.** For multi-module builds, run
+  them in the module that contains the Spring Boot application. Dependencies
+  declared through a Gradle version catalog (`libs.*`) aren't recognized, and new
+  ones are written as plain coordinates.
 
 ## Troubleshooting
 
@@ -456,6 +552,8 @@ Sprout is a client of the documented
 | A preset stopped working | `sprout presets show <name>` lists outdated values. Fix them with `sprout presets edit`. |
 | `destination exists … is not empty` | Use a different `--output`, or `--force` to merge (with backups). |
 | Options look outdated | `sprout cache refresh`. |
+| `sprout add` says a change "was customized" | Sprout didn't overwrite your version of that element; merge the printed snippet by hand. |
+| `sprout add` can't find the project | Run it inside the project, or pass `-C <dir>`. It looks for `pom.xml`, `build.gradle` or `build.gradle.kts`. |
 | The wizard does not start | stdin and stdout must be a terminal. Use flags in scripts, or `-i` to force it. |
 | `no editor configured` | `sprout config set editor "code --wait"` or set `$EDITOR`. |
 | Colors are unreadable | Set `NO_COLOR=1` or pass `--no-color`. |
@@ -487,6 +585,8 @@ internal/initializr/   HTTP client (metadata, generation, errors); no UI code
 internal/metadata/     metadata model, version/range logic, dependency search
 internal/project/      options, layering and validation → generation request
 internal/generator/    download, safe extraction, atomic placement
+internal/buildfile/    format-preserving Maven/Gradle parsing, merging and diffs
+internal/depedit/      add/remove: project detection and reference build files
 internal/cache/        metadata cache with TTL, ETag and offline fallback
 internal/config/       config.toml
 internal/presets/      presets.toml and built-in examples

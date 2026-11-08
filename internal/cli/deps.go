@@ -284,6 +284,10 @@ func runDepsInfo(cmd *cobra.Command, app *App, f *depsFlags, ids []string) error
 	var missing []string
 	for _, id := range ids {
 		d, ok := meta.Dependency(id)
+		if m := meta.Match(id, 3); !ok && m.Corrected != nil {
+			app.ui.note("Using %s for %q.", m.Corrected.ID, id)
+			d, ok = m.Corrected, true
+		}
 		if !ok {
 			msg := fmt.Sprintf("unknown dependency %q", id)
 			if s := meta.Suggest(id, 3); len(s) > 0 {

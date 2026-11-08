@@ -39,6 +39,19 @@ type Server struct {
 	requests []*http.Request
 	// Starter overrides the /starter.zip handler when set.
 	Starter http.HandlerFunc
+	// Coordinates is served by /dependencies (id -> groupId:artifactId).
+	Coordinates map[string]string
+	// BuildFiles maps "type|sorted,deps" to a build file returned (as the
+	// only file of the archive) by /starter.zip, emulating reference
+	// generation for 'sprout add/remove'.
+	BuildFiles map[string]string
+}
+
+// BuildFileKey is the BuildFiles key for a project type and dependencies.
+func BuildFileKey(projectType string, deps ...string) string {
+	sorted := append([]string(nil), deps...)
+	sort.Strings(sorted)
+	return projectType + "|" + strings.Join(sorted, ",")
 }
 
 // NewServer starts a fake server that serves the fixture metadata and
@@ -54,6 +67,16 @@ func NewServer(t testing.TB) *Server {
 			return
 		}
 		s.handleStarter(w, r)
+	})
+	mux.HandleFunc("/dependencies", func(w http.ResponseWriter, r *http.Request) {
+		s.record(r)
+		deps := map[string]map[string]string{}
+		for id, ga := range s.Coordinates {
+			g, a, _ := strings.Cut(ga, ":")
+			deps[id] = map[string]string{"groupId": g, "artifactId": a, "scope": "compile"}
+		}
+		w.Header().Set("Content-Type", "application/vnd.initializr.v2.2+json")
+		json.NewEncoder(w).Encode(map[string]any{"bootVersion": r.URL.Query().Get("bootVersion"), "dependencies": deps})
 	})
 	mux.HandleFunc("/pom.xml", func(w http.ResponseWriter, r *http.Request) {
 		s.record(r)
@@ -113,6 +136,21 @@ func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleStarter(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	if s.BuildFiles != nil {
+		var deps []string
+		if d := q.Get("dependencies"); d != "" {
+			deps = strings.Split(d, ",")
+		}
+		content, ok := s.BuildFiles[BuildFileKey(q.Get("type"), deps...)]
+		if !ok {
+			jsonError(w, http.StatusBadRequest, "no reference build for "+BuildFileKey(q.Get("type"), deps...))
+			return
+		}
+		name := map[string]string{"maven-project": "pom.xml", "gradle-project": "build.gradle", "gradle-project-kotlin": "build.gradle.kts"}[q.Get("type")]
+		w.Header().Set("Content-Type", "application/zip")
+		w.Write(BuildZip(map[string]string{name: content}, nil))
+		return
+	}
 	if deps := q.Get("dependencies"); deps != "" {
 		for d := range strings.SplitSeq(deps, ",") {
 			if d == "unknown-on-server" {

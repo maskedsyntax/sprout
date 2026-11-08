@@ -184,3 +184,28 @@ func ids(ds []*Dependency) string {
 	}
 	return strings.Join(out, ",")
 }
+
+func TestMatch(t *testing.T) {
+	m := loadFixture(t)
+	for in, want := range map[string]string{
+		"datajpa": "data-jpa", "DATA_JPA": "data-jpa", "Spring Data JPA": "data-jpa",
+		"spring data jpa": "data-jpa", "postgresql driver": "postgresql",
+	} {
+		res := m.Match(in, 5)
+		if res.Corrected == nil || res.Corrected.ID != want {
+			t.Errorf("Match(%q).Corrected = %v, want %s", in, res.Corrected, want)
+		}
+	}
+	if res := m.Match("web", 5); res.Exact == nil || res.Exact.ID != "web" {
+		t.Errorf("exact match failed: %+v", res)
+	}
+	for in, want := range map[string]string{"postgres": "postgresql", "datajap": "data-jpa", "securty": "security", "jpa": "data-jpa"} {
+		res := m.Match(in, 5)
+		if res.Corrected != nil || len(res.Candidates) == 0 || res.Candidates[0].ID != want {
+			t.Errorf("Match(%q) first candidate = %s, want %s", in, ids(res.Candidates), want)
+		}
+	}
+	if res := m.Match("qqqqqqqqqq", 5); len(res.Candidates) != 0 {
+		t.Errorf("nonsense matched %s", ids(res.Candidates))
+	}
+}

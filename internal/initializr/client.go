@@ -260,3 +260,41 @@ func readAPIError(resp *http.Response) error {
 	}
 	return e
 }
+
+// Coordinates is a dependency's Maven coordinates as reported by the
+// server's /dependencies endpoint.
+type Coordinates struct {
+	GroupID    string `json:"groupId"`
+	ArtifactID string `json:"artifactId"`
+	Scope      string `json:"scope,omitempty"`
+	Version    string `json:"version,omitempty"`
+	BOM        string `json:"bom,omitempty"`
+}
+
+// DependencyCoordinates returns the coordinates of every dependency for a
+// Spring Boot version, keyed by dependency ID.
+func (c *Client) DependencyCoordinates(ctx context.Context, bootVersion string) (map[string]Coordinates, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	target := c.BaseURL.String() + "/dependencies?" + url.Values{"bootVersion": {bootVersion}}.Encode()
+	req, err := c.newRequest(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.initializr.v2.2+json, application/vnd.initializr.v2.1+json;q=0.9, application/json;q=0.8")
+	resp, err := c.do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return nil, readAPIError(resp)
+	}
+	var payload struct {
+		Dependencies map[string]Coordinates `json:"dependencies"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxMetadataBytes)).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("parse dependency coordinates from %s: %w", c.BaseURL.Host, err)
+	}
+	return payload.Dependencies, nil
+}

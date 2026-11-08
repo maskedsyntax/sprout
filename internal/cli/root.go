@@ -125,7 +125,7 @@ the Spring team.`,
 	pf.BoolVar(&app.noColor, "no-color", false, "disable colored output (also honors NO_COLOR)")
 
 	root.AddGroup(&cobra.Group{ID: "main", Title: "Project commands:"}, &cobra.Group{ID: "manage", Title: "Management commands:"})
-	for _, c := range []*cobra.Command{newNewCmd(app), newDepsCmd(app), newVersionsCmd(app), newOptionsCmd(app)} {
+	for _, c := range []*cobra.Command{newNewCmd(app), newAddCmd(app), newRemoveCmd(app), newDepsCmd(app), newVersionsCmd(app), newOptionsCmd(app)} {
 		c.GroupID = "main"
 		root.AddCommand(c)
 	}

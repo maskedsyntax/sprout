@@ -187,6 +187,18 @@ func runNew(ctx context.Context, app *App, cmd *cobra.Command, f *newFlags, name
 	}
 	meta := res.Metadata
 
+	// Forgive typos in dependency names: unambiguous corrections are applied,
+	// close matches are offered in a terminal. Anything left unknown is
+	// reported by validation below, together with where it came from.
+	if len(opts.Dependencies) > 0 {
+		dr, err := app.resolveDependencyInputs(ctx, meta, opts.Dependencies, nil, interactive && !f.format.json())
+		var ve *project.ValidationError
+		if err != nil && !errors.As(err, &ve) {
+			return err
+		}
+		opts.Dependencies = append(depIDs(dr.Deps), dr.Unknown...)
+	}
+
 	output := f.output
 	if useWizard {
 		wres, err := wizard.Run(ctx, wizard.Input{

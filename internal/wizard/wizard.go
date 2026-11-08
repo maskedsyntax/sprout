@@ -407,28 +407,12 @@ func (w *builder) dependencyField() huh.Field {
 			if boot != nil && !d.CompatibleWith(*boot) {
 				continue
 			}
-			label := fmt.Sprintf("%s  [%s] · %s", d.Name, d.ID, d.Group)
-			opts = append(opts, huh.NewOption(label, d.ID).Selected(selected[d.ID]))
+			opts = append(opts, huh.NewOption(dependencyLabel(d), d.ID).Selected(selected[d.ID]))
 		}
 		return opts
 	}, &st.Boot)
 	ms.Value(&st.Deps)
-	ms.DescriptionFunc(func() string {
-		help := "Space select · / search · Enter confirm"
-		k, ok := ms.Hovered()
-		if !ok {
-			return help
-		}
-		d, found := m.Dependency(k)
-		if !found {
-			return help
-		}
-		desc := d.Description
-		if !d.Range.IsZero() {
-			desc += " (Spring Boot " + d.Range.String() + ")"
-		}
-		return help + "\n" + desc
-	}, hoverBinding{ms: ms, boot: &st.Boot})
+	ms.DescriptionFunc(func() string { return hoverDescription(m, ms) }, hoverBinding{ms: ms, boot: &st.Boot})
 	return ms
 }
 
