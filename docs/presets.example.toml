@@ -1,0 +1,38 @@
+# Example presets.toml for Sprout.
+#
+# Copy entries into your presets file (see `sprout config path`; presets.toml
+# lives next to config.toml) or create them with `sprout presets save`.
+# Every key is optional; omitted values fall back to your config defaults and
+# then to the server defaults. Presets are validated against the server's
+# current metadata each time they are used.
+
+[presets.rest-api]
+language = "java"
+type = "maven-project"
+packaging = "jar"
+group = "com.example"
+java = "21"
+dependencies = ["web", "data-jpa", "postgresql"]
+
+[presets.kotlin-service]
+language = "kotlin"
+type = "gradle-project-kotlin"
+boot = "4.1.x"                # newest 4.1 GA release at generation time
+java = "21"
+config-format = "yaml"
+dependencies = ["web", "actuator", "validation"]
+
+[presets.reactive]
+type = "gradle-project"
+dependencies = ["webflux", "data-r2dbc", "postgresql"]
+
+[presets.war-app]
+packaging = "war"
+version = "1.0.0-SNAPSHOT"
+description = "Deployable WAR application"
+dependencies = ["web", "thymeleaf"]
+
+# Options that only a particular Initializr server offers go in an "extra"
+# table, keyed by the capability ID shown in `sprout options`.
+# [presets.internal.extra]
+# someServerOption = "value"

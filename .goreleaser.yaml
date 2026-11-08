@@ -1,0 +1,72 @@
+# GoReleaser configuration: https://goreleaser.com
+version: 2
+
+project_name: sprout
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: sprout
+    main: ./cmd/sprout
+    binary: sprout
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/maskedsyntax/sprout/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/maskedsyntax/sprout/internal/buildinfo.Commit={{ .FullCommit }}
+      - -X github.com/maskedsyntax/sprout/internal/buildinfo.Date={{ .CommitDate }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: sprout
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Homebrew tap publishing is prepared but disabled until a tap repository
+# and token exist. To enable: create maskedsyntax/homebrew-tap, add a
+# HOMEBREW_TAP_TOKEN secret, and set skip_upload to false.
+homebrew_casks:
+  - name: sprout
+    repository:
+      owner: maskedsyntax
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/maskedsyntax/sprout
+    description: Fast, interactive CLI for generating Spring Boot projects with Spring Initializr
+    license: MIT
+    skip_upload: true
+
+release:
+  github:
+    owner: maskedsyntax
+    name: sprout
+  footer: |
+    Sprout is an independent project and is not affiliated with or endorsed by the Spring team.

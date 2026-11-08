@@ -1,0 +1,25 @@
+version: "2"
+linters:
+  enable:
+    - errorlint
+    - gocritic
+    - misspell
+    - unconvert
+    - usestdlibvars
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*os.File).Close
+        - os.Remove
+        - os.RemoveAll
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters: [errcheck, gocritic]
+      - path: internal/testutil/
+        linters: [errcheck]
+formatters:
+  enable:
+    - gofmt
