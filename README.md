@@ -28,6 +28,8 @@ Next steps:
 - [Interactive mode](#interactive-mode)
 - [Flag-based mode](#flag-based-mode)
 - [Adding and removing dependencies](#adding-and-removing-dependencies)
+- [Creating classes, records and packages](#creating-classes-records-and-packages)
+- [Zed integration](#zed-integration)
 - [Dependency search](#dependency-search)
 - [Spring Boot versions and server options](#spring-boot-versions-and-server-options)
 - [Presets](#presets)
@@ -152,6 +154,7 @@ detail. Every command also has `--help`, for example `sprout add --help`.
 | Command | Use it to |
 |---------|-----------|
 | [`new`](#sprout-new) | Create a new Spring Boot project |
+| [`new class`, `interface`, `enum`, `record`, `package`](#sprout-new-class--interface--enum--record--package) | Create Java types and packages in your project |
 | [`add`](#sprout-add) | Add dependencies to an existing project |
 | [`remove`](#sprout-remove) | Remove dependencies from an existing project |
 | [`deps`](#sprout-deps) | Find dependency names |
@@ -191,6 +194,31 @@ sprout new my-api --deps web --dry-run             # only show what would happen
 Then `cd my-api` and run `./mvnw spring-boot:run` (Maven) or `./gradlew bootRun`
 (Gradle). See [Interactive mode](#interactive-mode) and
 [Flag-based mode](#flag-based-mode) for every option.
+
+### `sprout new class` / `interface` / `enum` / `record` / `package`
+
+Creates a Java file (or package folder) in the right place, from the
+project root or any folder inside it. No need to `cd` into
+`src/main/java/com/example/...`.
+
+1. Run `sprout new` inside your project and choose **Java Class**, **Interface**,
+   **Enum**, **Record** or **Package**.
+2. Pick the package from the list (`/` to search), or **+ Create new package**.
+3. Type the name, check the preview, and press `Enter`.
+
+Or say it all at once:
+
+```sh
+sprout new class User --in model             # com.example.demo.model.User
+sprout new class controller.UserController   # package in the name
+sprout new interface service.UserService
+sprout new enum model.UserStatus
+sprout new record dto.UserResponse
+sprout new package repository
+```
+
+Package names are relative to your app's base package unless fully qualified.
+See [Creating classes, records and packages](#creating-classes-records-and-packages).
 
 ### `sprout add`
 
@@ -531,6 +559,155 @@ or annotation-processor setup (Lombok needs four Gradle configurations, or
 - Anything else, like `postgres` or `securty`, opens a "did you mean…?" chooser
   in a terminal. In scripts it fails with suggestions instead of guessing.
 
+## Creating classes, records and packages
+
+Create Java types and packages without navigating into
+`src/main/java/com/example/...`. Run these from the project root or any
+folder inside the project:
+
+```sh
+sprout new                                  # inside a project: asks what to create
+sprout new class User                       # asks for the package (in a terminal)
+sprout new class User --in model            # → com.example.demo.model.User
+sprout new class User --in com.example.demo.model   # same thing, fully qualified
+sprout new class controller.UserController  # package as part of the name
+sprout new interface service.UserService
+sprout new enum model.UserStatus
+sprout new record dto.UserResponse
+sprout new package controller               # → com.example.demo.controller
+sprout new package admin --in controller    # → com.example.demo.controller.admin
+sprout new class User --in model --dry-run  # preview only
+```
+
+```console
+$ sprout new
+┃ What would you like to create?
+┃ > Java Class
+┃   Interface
+┃   Enum
+┃   Record
+┃   Package
+┃   New Spring Boot project…
+
+┃ Select destination package:
+┃   com.example.demo
+┃ > com.example.demo.controller
+┃   com.example.demo.dto
+┃   com.example.demo.service
+┃   + Create new package
+
+┃ Java Class name
+┃ > UserController
+
+Create class src/main/java/com/example/demo/controller/UserController.java
+
+    package com.example.demo.controller;
+
+    public class UserController {
+    }
+
+Create it? [Y/n]
+✓ Created class com.example.demo.controller.UserController
+  ./src/main/java/com/example/demo/controller/UserController.java
+```
+
+Generated files are minimal: just the package declaration and an empty type
+(`public record UserResponse() {}` for records). No getters, setters or annotations.
+
+**Where files go.**
+- Sprout finds the project by walking up to the nearest `pom.xml`, `build.gradle`
+  or `build.gradle.kts`, and uses its `src/main/java` folder.
+- The **base package** is the package of your `@SpringBootApplication` class. If
+  there is none, it's the common prefix of your existing packages.
+- A package name is **relative to the base package** (`controller` →
+  `com.example.demo.controller`) unless it is already fully qualified: it starts
+  with the base package, names an existing package, or starts like a reverse
+  domain (`com.`, `org.`, `io.`, …). The base package is never duplicated.
+- With `--in`, a package in the name is relative to it:
+  `sprout new class admin.Panel --in controller` → `com.example.demo.controller.admin.Panel`.
+- **Run from inside a package folder**, a plain name goes into that package:
+  in `src/main/java/com/example/demo/model`, `sprout new class Address` creates
+  `com.example.demo.model.Address`.
+- Missing package folders are created.
+
+**Prompts and scripts.** Anything you don't give on the command line is asked for
+in a terminal: the package, the name, and the module in a multi-module project.
+If you were asked anything, Sprout shows a preview and asks before writing (`-y`
+skips that). When every detail is given (`sprout new class User --in model`),
+the file is created directly. In scripts and editor tasks without a terminal,
+Sprout never prompts. A plain `sprout new class User` uses the base package
+there, and missing information is an error. `--json` prints a machine-readable
+result.
+
+**Multi-module projects.** Run inside a module and Sprout uses that module. At
+the root of a multi-module build, it asks which module, or you pass
+`--module api` (the module's path from the root).
+
+**Safety.**
+- Names are checked: type names must be valid Java identifiers, not keywords or
+  restricted names (`var`, `record`, …), and package names must be valid too.
+- Existing files are never overwritten.
+- Names with `/`, `\` or `..` are rejected, so nothing can be written outside
+  `src/main/java`.
+- Records need Java 16 or newer. If your build file sets an older Java version,
+  Sprout says so.
+- Cancelling (`Ctrl+C`, or answering `n`) writes nothing. If writing fails,
+  folders Sprout just created are removed again.
+- Build files are never changed.
+
+## Zed integration
+
+[Zed](https://zed.dev) has no right-click "New Java Class" action, but its
+[tasks](https://zed.dev/docs/tasks) can run Sprout in the built-in terminal.
+Copy [docs/zed/tasks.json](docs/zed/tasks.json) to `.zed/tasks.json` in your
+project, or to `~/.config/zed/tasks.json` for every project:
+
+```json
+[
+  {
+    "label": "Sprout: New Java type",
+    "command": "sprout",
+    "args": ["new"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": true,
+    "hide": "on_success"
+  },
+  {
+    "label": "Sprout: New Java type in current package",
+    "command": "sprout",
+    "args": ["new"],
+    "cwd": "$ZED_DIRNAME",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": true,
+    "hide": "on_success"
+  }
+]
+```
+
+- Open the command palette, run `task: spawn`, and pick a task.
+- **"New Java type"** starts from the project root and asks for everything.
+- **"New Java type in current package"** runs in the folder of the file you're
+  editing, so new types go into that file's package. Zed lists this task only
+  while a file is open.
+- `hide: "on_success"` closes the terminal tab once the file is created. Remove it
+  to keep the tab open.
+- `sprout` must be on the `PATH` Zed's terminal uses (`which sprout` in that
+  terminal).
+
+To use a shortcut, add this to your Zed keymap (`zed: open keymap`):
+
+```json
+[
+  {
+    "context": "Workspace",
+    "bindings": {
+      "ctrl-alt-n": ["task::Spawn", { "task_name": "Sprout: New Java type in current package" }]
+    }
+  }
+]
+```
+
 ## Dependency search
 
 ```console
@@ -744,6 +921,9 @@ Sprout is a client of the documented
   set with `--set`.
 
 ### Known limitations
+
+- **Java types go in `src/main/java` only.** `sprout new class` and the other
+  type commands don't support custom source folders or Kotlin/Groovy sources yet.
 
 - **The server is more lenient than Sprout.** start.spring.io silently replaces some
   invalid values (an unsupported `javaVersion`, an invalid `packageName`) with

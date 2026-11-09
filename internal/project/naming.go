@@ -56,6 +56,10 @@ func ValidatePackageName(s string) error {
 	return nil
 }
 
+// IsJavaIdentifier reports whether s is a valid Java identifier that is not
+// a reserved keyword or literal.
+func IsJavaIdentifier(s string) bool { return isJavaIdentifier(s) }
+
 func isJavaIdentifier(s string) bool {
 	if s == "" || javaKeywords[s] {
 		return false

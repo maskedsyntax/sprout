@@ -10,9 +10,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/maskedsyntax/sprout/internal/generator"
 	"github.com/maskedsyntax/sprout/internal/history"
+	"github.com/maskedsyntax/sprout/internal/javagen"
 	"github.com/maskedsyntax/sprout/internal/metadata"
 	"github.com/maskedsyntax/sprout/internal/platform"
 	"github.com/maskedsyntax/sprout/internal/project"
@@ -62,8 +64,12 @@ func newNewCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "new [name]",
 		Aliases: []string{"init", "create"},
-		Short:   "Generate a new Spring Boot project",
-		Long: `Generate a new Spring Boot project.
+		Short:   "Generate a new Spring Boot project, or a Java type in the current one",
+		Long: `Generate a new Spring Boot project, or create a Java class, interface,
+enum, record or package in the current project (see 'sprout new class --help').
+
+Inside an existing project, 'sprout new' without arguments asks what to
+create: a Java type, a package, or a new Spring Boot project.
 
 Without configuration flags, an interactive wizard starts when the terminal
 supports it. With flags (or --no-interactive), the project is generated
@@ -85,19 +91,50 @@ into a .sprout-backup-<timestamp>/ folder inside the destination.`,
   sprout new my-api --java 21 --boot 4.1.x
   sprout new my-api --preset rest-api
   sprout new my-api --git --open
-  sprout new my-api --deps web --dry-run --json`,
-		Args:              cobra.MaximumNArgs(1),
+  sprout new my-api --deps web --dry-run --json
+
+  # Inside a project:
+  sprout new class User --in model
+  sprout new record dto.UserResponse
+  sprout new package controller`,
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 1 {
+				return usageErrorf("unknown kind %q: use class, interface, enum, record or package (or one project name)", args[0])
+			}
+			return nil
+		},
 		ValidArgsFunction: cobra.NoFileCompletions,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := ""
 			if len(args) == 1 {
 				name = args[0]
+			} else if app.interactive() && !anyLocalFlag(cmd) {
+				// Inside a project, offer Java types as well as a new project.
+				if proj, err := javagen.Find("."); err == nil {
+					choice, err := wizard.ChooseKind(cmd.Context(), app.promptIO(), true)
+					if err != nil {
+						return err
+					}
+					if choice != wizard.NewProjectChoice {
+						return runNewType(cmd.Context(), app, &typeFlags{dir: "."}, javagen.Kind(choice), "", proj, true)
+					}
+				}
 			}
 			return runNew(cmd.Context(), app, cmd, &f, name)
 		},
 	}
 	f.register(cmd, app, true)
+	for _, c := range newTypeCmds(app) {
+		cmd.AddCommand(c)
+	}
 	return cmd
+}
+
+// anyLocalFlag reports whether any of the command's own flags was given.
+func anyLocalFlag(cmd *cobra.Command) bool {
+	used := false
+	cmd.LocalFlags().VisitAll(func(fl *pflag.Flag) { used = used || fl.Changed })
+	return used
 }
 
 // configFlagsUsed reports whether any project configuration was supplied

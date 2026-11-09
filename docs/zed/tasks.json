@@ -1,0 +1,20 @@
+[
+  {
+    "label": "Sprout: New Java type",
+    "command": "sprout",
+    "args": ["new"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": true,
+    "hide": "on_success"
+  },
+  {
+    "label": "Sprout: New Java type in current package",
+    "command": "sprout",
+    "args": ["new"],
+    "cwd": "$ZED_DIRNAME",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": true,
+    "hide": "on_success"
+  }
+]
